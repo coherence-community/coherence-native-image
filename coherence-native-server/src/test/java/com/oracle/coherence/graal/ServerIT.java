@@ -26,9 +26,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 
 public class ServerIT
     {
-    @RegisterExtension
-    static TestLogsExtension testLogs = new TestLogsExtension(ServerIT.class);
-
     @Test
     void shouldStartSimpleClusterMember() throws Exception
         {
@@ -94,5 +91,6 @@ public class ServerIT
             }
         }
 
-
+    @RegisterExtension
+    static TestLogsExtension testLogs = new TestLogsExtension(ServerIT.class);
     }
