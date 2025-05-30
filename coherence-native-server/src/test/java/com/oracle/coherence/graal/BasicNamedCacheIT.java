@@ -14,123 +14,45 @@ import com.oracle.bedrock.runtime.options.Arguments;
 import com.oracle.bedrock.runtime.options.DisplayName;
 import com.oracle.bedrock.testsupport.deferred.Eventually;
 import com.oracle.bedrock.testsupport.junit.TestLogsExtension;
+import com.oracle.coherence.graal.model.java.Country;
+
+import com.oracle.coherence.graal.model.pof.Address;
+import com.oracle.coherence.graal.model.pof.Customer;
 import com.oracle.coherence.graal.testing.NativeApplication;
-import com.tangosol.net.CacheService;
+
 import com.tangosol.net.Cluster;
 import com.tangosol.net.Coherence;
 import com.tangosol.net.NamedCache;
 import com.tangosol.net.PartitionedService;
 import com.tangosol.net.Service;
 import com.tangosol.net.Session;
+
+import com.tangosol.util.Aggregators;
+import com.tangosol.util.Filters;
+import com.tangosol.util.MapListener;
+import com.tangosol.util.Processors;
+import com.tangosol.util.aggregator.GroupAggregator;
+import com.tangosol.util.listener.SimpleMapListener;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-import java.util.Enumeration;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Random;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.CoreMatchers.*;
 import static org.hamcrest.MatcherAssert.assertThat;
 
-public class BasicNamedCacheIT
-    {
-    @BeforeAll
-    static void startCoherence() throws Exception
-        {
-        System.setProperty("coherence.cluster", CLUSTER_NAME);
-        System.setProperty("coherence.wka", "127.0.0.1");
-        System.setProperty("coherence.localhost", "127.0.0.1");
-        System.setProperty("coherence.distributed.localstorage", "false");
+public class BasicNamedCacheIT {
 
-        // Start Coherence in this test JVM
-        coherence = Coherence.clusterMember().start().get(5, TimeUnit.MINUTES);
+    private static final String GOLD = "GOLD";
+    private static final String SILVER = "SILVER";
+    private static final String BRONZE = "BRONZE";
 
-        // Spawn two cluster members that will join the test JVM
-        LocalPlatform platform = LocalPlatform.get();
-
-        server1 = platform.launch(NativeApplication.class,
-                        Arguments.of("-Djava.net.preferIPv4Stack=true",
-                                "-Dcoherence.cluster=" + CLUSTER_NAME,
-                                "-Dcoherence.localhost=127.0.0.1",
-                                "-Dcoherence.wka=127.0.0.1"),
-                        ClassName.of(Server.class),
-                        ClassPath.automatic(),
-                        DisplayName.of("server-1"),
-                        testLogs);
-
-        server2 = platform.launch(NativeApplication.class,
-                        Arguments.of("-Djava.net.preferIPv4Stack=true",
-                                "-Dcoherence.cluster=" + CLUSTER_NAME,
-                                "-Dcoherence.localhost=127.0.0.1",
-                                "-Dcoherence.wka=127.0.0.1"),
-                        ClassName.of(Server.class),
-                        ClassPath.automatic(),
-                        DisplayName.of("server-2"),
-                        testLogs);
-
-        Cluster cluster = coherence.getCluster();
-        Eventually.assertDeferred(() -> cluster.getMemberSet().size(), is(3), Timeout.of(5, TimeUnit.MINUTES));
-
-        Enumeration<String> serviceNames = cluster.getServiceNames();
-        while (serviceNames.hasMoreElements())
-            {
-            String name = serviceNames.nextElement();
-            Service service = cluster.getService(name);
-            if (service instanceof PartitionedService)
-                {
-                Eventually.assertDeferred(() -> ((PartitionedService) service).getOwnershipEnabledMembers().size(),
-                        is(2),
-                        Timeout.of(5, TimeUnit.MINUTES));
-                }
-            }
-        }
-
-    @AfterAll
-    static void shutdown()
-        {
-        if (server1 != null)
-            {
-            server1.close();
-            }
-        if (server2 != null)
-            {
-            server2.close();
-            }
-        Coherence.closeAll();
-        }
-
-    @AfterEach
-    void removeCaches()
-        {
-        for (NamedCache<?, ?> cache : caches.values())
-            {
-            cache.destroy();
-            }
-        caches.clear();
-        }
-
-    @Test
-    public void shouldPutIntoCache()
-        {
-        NamedCache<String, String> cache = getRandomCache();
-        String previous = cache.put("key-1", "value-1");
-        assertThat(previous, is(nullValue()));
-        assertThat(cache.get("key-1"), is("value-1"));
-        }
-
-
-    <K, V> NamedCache<K, V> getRandomCache()
-        {
-        Session session = coherence.getSession();
-        String name = "test-" + random.nextInt();
-        return session.getCache(name);
-        }
+    private static final String[] TYPES = new String[]{GOLD, SILVER, BRONZE};
 
     @RegisterExtension
     static TestLogsExtension testLogs = new TestLogsExtension(ServerIT.class);
@@ -165,4 +87,151 @@ public class BasicNamedCacheIT
      * so that the caches can be cleaned up between tests.
      */
     final Map<String, NamedCache<?, ?>> caches = new HashMap<>();
+
+    @BeforeAll
+    static void startCoherence() throws Exception {
+        System.setProperty("coherence.cluster", CLUSTER_NAME);
+        System.setProperty("coherence.wka", "127.0.0.1");
+        System.setProperty("coherence.localhost", "127.0.0.1");
+        System.setProperty("coherence.distributed.localstorage", "false");
+
+        // Start Coherence in this test JVM
+        coherence = Coherence.clusterMember().start().get(5, TimeUnit.MINUTES);
+
+        // Spawn two cluster members that will join the test JVM
+        LocalPlatform platform = LocalPlatform.get();
+
+        server1 = platform.launch(NativeApplication.class,
+                Arguments.of("-Djava.net.preferIPv4Stack=true",
+                        "-Dcoherence.cluster=" + CLUSTER_NAME,
+                        "-Dcoherence.localhost=127.0.0.1",
+                        "-Dcoherence.wka=127.0.0.1"),
+                ClassName.of(Server.class),
+                ClassPath.automatic(),
+                DisplayName.of("server-1"),
+                testLogs);
+
+        server2 = platform.launch(NativeApplication.class,
+                Arguments.of("-Djava.net.preferIPv4Stack=true",
+                        "-Dcoherence.cluster=" + CLUSTER_NAME,
+                        "-Dcoherence.localhost=127.0.0.1",
+                        "-Dcoherence.wka=127.0.0.1"),
+                ClassName.of(Server.class),
+                ClassPath.automatic(),
+                DisplayName.of("server-2"),
+                testLogs);
+
+        Cluster cluster = coherence.getCluster();
+        Eventually.assertDeferred(() -> cluster.getMemberSet().size(), is(3), Timeout.of(5, TimeUnit.MINUTES));
+
+        Enumeration<String> serviceNames = cluster.getServiceNames();
+        while (serviceNames.hasMoreElements()) {
+            String name = serviceNames.nextElement();
+            Service service = cluster.getService(name);
+            if (service instanceof PartitionedService) {
+                Eventually.assertDeferred(() -> ((PartitionedService) service).getOwnershipEnabledMembers().size(),
+                        is(2),
+                        Timeout.of(5, TimeUnit.MINUTES));
+            }
+        }
     }
+
+    @AfterAll
+    static void shutdown() {
+        if (server1 != null) {
+            server1.close();
+        }
+        if (server2 != null) {
+            server2.close();
+        }
+        Coherence.closeAll();
+    }
+
+    @AfterEach
+    void removeCaches() {
+        for (NamedCache<?, ?> cache : caches.values()) {
+            cache.destroy();
+        }
+        caches.clear();
+    }
+
+    @Test
+    public void shouldPutIntoCache() {
+        NamedCache<String, String> cache = getRandomCache();
+        String previous = cache.put("key-1", "value-1");
+        assertThat(previous, is(nullValue()));
+        assertThat(cache.get("key-1"), is("value-1"));
+    }
+
+    @Test
+    public void shouldUseRecords() {
+        final int countryCount = 200;
+        NamedCache<Integer, Country> countries = getRandomCache();
+        for (int i = 1; i <= countryCount; i++) {
+            countries.put(i, new Country("C" + i, "Country-" + i, random.nextInt(10_000, 1_000_000)));
+        }
+        assertThat(countries.size(), is(countryCount));
+    }
+
+    @Test
+    public void shouldUsePOF() {
+        final int maxCustomers = 10_000;
+
+        Map<Integer, Customer> buffer = new HashMap<>();
+        NamedCache<Integer, Customer> customers = coherence.getSession().getCache("pof-customers");
+        customers.addIndex(Customer::getCustomerType);
+
+        // add map listener
+        final AtomicInteger insertCounter = new AtomicInteger();
+
+        MapListener<Integer, Customer> listener = new SimpleMapListener<Integer, Customer>()
+                .addInsertHandler((e-> insertCounter.incrementAndGet()));
+        customers.addMapListener(listener);
+
+        for (int i = 1; i <= maxCustomers; i++) {
+            buffer.put(i, new Customer(i, "name-" + i, random.nextDouble(), getRandomAddress(), getRandomAddress(), getRandomCustomerType()));
+            if (i % 100 == 0) {
+                customers.putAll(buffer);
+                buffer.clear();
+            }
+        }
+        if (!buffer.isEmpty()) {
+            customers.putAll(buffer);
+        }
+
+        assertThat(customers.size(), is(maxCustomers));
+
+        Eventually.assertDeferred(insertCounter::get, is(maxCustomers), Timeout.of(1, TimeUnit.MINUTES));
+
+        // aggregate
+        Map<String, Double> balanceByType = customers.aggregate(
+                GroupAggregator.createInstance(Customer::getCustomerType, Aggregators.sum(Customer::getBalance)));
+        assertThat(balanceByType.isEmpty(), is(false));
+
+        // entry processor to update all balances for GOLD customers to 0
+        customers.invokeAll(Filters.equal(Customer::getCustomerType, GOLD), Processors.update(Customer::setBalance, 0.0d));
+
+        // return values
+        assertThat(customers.values(Filters.equal(Customer::getCustomerType, GOLD)).size(), not(0));
+
+        // stream
+        assertThat(customers.stream(Filters.equal(Customer::getCustomerType, SILVER)).findFirst(), is(notNullValue()));
+    }
+
+    private Address getRandomAddress() {
+        return new Address("Address line 1", "address line 2", "city-" + random.nextInt(),
+                "state-" + random.nextInt(), "zip" + random.nextInt(), "country-" + random.nextInt());
+    }
+
+    private String getRandomCustomerType() {
+        return TYPES[random.nextInt(TYPES.length)];
+    }
+
+    <K, V> NamedCache<K, V> getRandomCache() {
+        Session session = coherence.getSession();
+        String name = "test-" + random.nextInt();
+        NamedCache<K, V> cache = session.getCache(name);
+        caches.put(name, cache);
+        return cache;
+    }
+}

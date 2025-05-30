@@ -24,11 +24,10 @@ import java.util.concurrent.TimeUnit;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
-public class ServerIT
-    {
+public class ServerIT {
+
     @Test
-    void shouldStartSimpleClusterMember() throws Exception
-        {
+    void shouldStartSimpleClusterMember() throws Exception {
         CountDownLatch latch = new CountDownLatch(1);
         ApplicationConsole console = testLogs.builder()
                 .addStdErrListener(s -> s.contains("Started Coherence server"), s -> latch.countDown())
@@ -42,17 +41,15 @@ public class ServerIT
                 ClassName.of(Server.class),
                 ClassPath.automatic(),
                 DisplayName.of("server"),
-                Console.of(console)))
-            {
+                Console.of(console))) {
             boolean awaitMessage = latch.await(1, TimeUnit.MINUTES);
             assertThat(awaitMessage, is(true));
-            }
         }
+    }
 
 
     @Test
-    void shouldStartTwoMemberCluster() throws Exception
-        {
+    void shouldStartTwoMemberCluster() throws Exception {
         CountDownLatch latch1 = new CountDownLatch(1);
         CountDownLatch latch2 = new CountDownLatch(1);
         CountDownLatch latch3 = new CountDownLatch(1);
@@ -77,20 +74,19 @@ public class ServerIT
                 Console.of(console1));
 
              NativeApplication server2 = LocalPlatform.get().launch(NativeApplication.class,
-                             Arguments.of("-Djava.net.preferIPv4Stack=true",
-                                     "-Dcoherence.cluster=native-image-test-2",
-                                     "-Dcoherence.localhost=127.0.0.1",
-                                     "-Dcoherence.wka=127.0.0.1"),
-                             ClassName.of(Server.class),
-                             ClassPath.automatic(),
-                             DisplayName.of("server-2"),
-                             Console.of(console2)))
-            {
+                     Arguments.of("-Djava.net.preferIPv4Stack=true",
+                             "-Dcoherence.cluster=native-image-test-2",
+                             "-Dcoherence.localhost=127.0.0.1",
+                             "-Dcoherence.wka=127.0.0.1"),
+                     ClassName.of(Server.class),
+                     ClassPath.automatic(),
+                     DisplayName.of("server-2"),
+                     Console.of(console2))) {
             assertThat(latch1.await(1, TimeUnit.MINUTES), is(true));
             assertThat(latch1.await(2, TimeUnit.MINUTES), is(true));
-            }
         }
+    }
 
     @RegisterExtension
     static TestLogsExtension testLogs = new TestLogsExtension(ServerIT.class);
-    }
+}

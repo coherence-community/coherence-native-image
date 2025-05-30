@@ -34,34 +34,30 @@ import java.util.stream.Collectors;
  * control a running GraalVM native application.
  */
 public interface NativeApplication
-        extends Application
-    {
-    static <A extends NativeApplication> Predicate<A> withName(String name)
-        {
-        String  regex   = Pattern.quote(name);
+        extends Application {
+
+    static <A extends NativeApplication> Predicate<A> withName(String name) {
+        String regex = Pattern.quote(name);
         Pattern pattern = Pattern.compile(regex);
         return a -> pattern.matcher(a.getName()).matches();
-        }
+    }
 
-    static <A extends NativeApplication> Predicate<A> withNameMatching(String regex)
-        {
+    static <A extends NativeApplication> Predicate<A> withNameMatching(String regex) {
         Pattern pattern = Pattern.compile(regex);
         return a -> pattern.matcher(a.getName()).matches();
-        }
+    }
 
-    static <A extends NativeApplication> Predicate<A> withNamePrefix(String name)
-        {
-        String  regex   = Pattern.quote(name);
+    static <A extends NativeApplication> Predicate<A> withNamePrefix(String name) {
+        String regex = Pattern.quote(name);
         Pattern pattern = Pattern.compile(regex);
         return a -> pattern.matcher(a.getName()).lookingAt();
-        }
+    }
 
-    static <A extends NativeApplication> Predicate<A> withNameContaining(String name)
-        {
-        String  regex   = Pattern.quote(name);
+    static <A extends NativeApplication> Predicate<A> withNameContaining(String name) {
+        String regex = Pattern.quote(name);
         Pattern pattern = Pattern.compile(regex);
         return a -> pattern.matcher(a.getName()).find();
-        }
+    }
 
     /**
      * Obtains the name of the {@link NativeApplication}.
@@ -174,135 +170,109 @@ public interface NativeApplication
     /**
      * The {@link com.oracle.bedrock.runtime.MetaClass} for generic {@link NativeApplication}s.
      */
-    class MetaClass implements com.oracle.bedrock.runtime.MetaClass<NativeApplication>
-        {
+    class MetaClass implements com.oracle.bedrock.runtime.MetaClass<NativeApplication> {
         private static final Pattern VERSION_PATTERN = Pattern.compile("(.*)-\\d+\\.\\d+\\.\\d+(-SNAPSHOT)?(\\.jar)$");
 
         /**
          * Constructs a {@link MetaClass} for a {@link NativeApplication}.
          */
         @OptionsByType.Default
-        public MetaClass()
-            {
-            }
+        public MetaClass() {
+        }
 
         @Override
-        public Class<? extends NativeApplication> getImplementationClass(Platform platform, OptionsByType options)
-            {
+        public Class<? extends NativeApplication> getImplementationClass(Platform platform, OptionsByType options) {
             return SimpleNativeApplication.class;
-            }
+        }
 
         @Override
-        public void onLaunching(Platform platform, OptionsByType options)
-            {
-            boolean   isNativeTest = Boolean.getBoolean("coherence.native.tests");
-            String    nativeImage  = System.getProperty("coherence.native.image");
-            ClassName className    = options.get(ClassName.class);
+        public void onLaunching(Platform platform, OptionsByType options) {
+            boolean isNativeTest = Boolean.getBoolean("coherence.native.tests");
+            String nativeImage = System.getProperty("coherence.native.image");
+            ClassName className = options.get(ClassName.class);
 
-            if (isNativeTest)
-                {
-                if (nativeImage == null || nativeImage.isBlank())
-                    {
+            if (isNativeTest) {
+                if (nativeImage == null || nativeImage.isBlank()) {
                     // no native image set, so try to work it out from the class name
                     Class<?> clz;
-                    try
-                        {
+                    try {
                         clz = Class.forName(className.getName());
 
-                        File     buildFolder = MavenProjectFileUtils.locateBuildFolder(clz);
+                        File buildFolder = MavenProjectFileUtils.locateBuildFolder(clz);
 
-                        if (buildFolder == null)
-                            {
+                        if (buildFolder == null) {
                             throw new IllegalStateException("Unable to locate build folder for " + clz);
-                            }
+                        }
 
-                        if (!buildFolder.exists())
-                            {
+                        if (!buildFolder.exists()) {
                             throw new IllegalStateException("Non-existent build folder for " + clz);
-                            }
+                        }
 
-                        if (!buildFolder.isDirectory())
-                            {
+                        if (!buildFolder.isDirectory()) {
                             throw new IllegalStateException("Build folder " + buildFolder + " is not a directory");
-                            }
+                        }
 
 
-                        try (DirectoryStream<Path> stream = Files.newDirectoryStream(buildFolder.toPath()))
-                            {
-                            for (Path path : stream)
-                                {
+                        try (DirectoryStream<Path> stream = Files.newDirectoryStream(buildFolder.toPath())) {
+                            for (Path path : stream) {
                                 File file = path.toFile();
                                 String fileName = file.getAbsolutePath();
-                                if (fileName.endsWith(".jar"))
-                                    {
+                                if (fileName.endsWith(".jar")) {
                                     String stripped = stripVersion(fileName);
                                     File imageFile = new File(stripped);
-                                    if (imageFile.exists() && imageFile.isFile())
-                                        {
+                                    if (imageFile.exists() && imageFile.isFile()) {
                                         nativeImage = imageFile.getAbsolutePath();
                                         break;
-                                        }
                                     }
                                 }
                             }
                         }
-                    catch (Exception e)
-                        {
+                    } catch (Exception e) {
                         throw new RuntimeException(e);
-                        }
-
-                    if (nativeImage == null)
-                        {
-                        throw new RuntimeException("Could not find native image from class  " + clz);
-                        }
                     }
+
+                    if (nativeImage == null) {
+                        throw new RuntimeException("Could not find native image from class  " + clz);
+                    }
+                }
 
                 options.add(Executable.named(nativeImage));
                 options.remove(ClassName.class);
                 options.remove(ClassPath.class);
-                }
-            else
-                {
+            } else {
                 options.add(Executable.named("java"));
 
                 ClassPath cp = options.get(ClassPath.class);
-                if (cp != null)
-                    {
+                if (cp != null) {
                     String path = Arrays.stream(cp.getURLs())
                             .map(URL::getPath)
                             .collect(Collectors.joining(File.pathSeparator));
-                    if (!path.isEmpty())
-                        {
+                    if (!path.isEmpty()) {
                         options.add(Argument.of("-cp", path));
-                        }
                     }
+                }
 
-                if (className != null)
-                    {
+                if (className != null) {
                     options.add(Argument.of(className.getName()));
-                    }
                 }
             }
-
-        @Override
-        public void onLaunch(Platform platform, OptionsByType options)
-            {
-            }
-
-        @Override
-        public void onLaunched(Platform platform, NativeApplication application, OptionsByType options)
-            {
-            }
-
-        private String stripVersion(String jar)
-            {
-            Matcher matcher = VERSION_PATTERN.matcher(jar);
-            if (matcher.matches())
-                {
-                return matcher.group(1);
-                }
-            throw new IllegalArgumentException("Cannot strip version from jar name " + jar);
-            }
-
         }
+
+        @Override
+        public void onLaunch(Platform platform, OptionsByType options) {
+        }
+
+        @Override
+        public void onLaunched(Platform platform, NativeApplication application, OptionsByType options) {
+        }
+
+        private String stripVersion(String jar) {
+            Matcher matcher = VERSION_PATTERN.matcher(jar);
+            if (matcher.matches()) {
+                return matcher.group(1);
+            }
+            throw new IllegalArgumentException("Cannot strip version from jar name " + jar);
+        }
+
     }
+}
