@@ -19,17 +19,16 @@ import com.oracle.bedrock.runtime.SimpleApplication;
  */
 public class SimpleNativeApplication
         extends AbstractApplication<ApplicationProcess>
-        implements NativeApplication
-    {
+        implements NativeApplication {
+
     /**
      * Constructs a {@link SimpleApplication}
      *
-     * @param platform  the {@link Platform} on which the {@link NativeApplication} was launched
-     * @param process   the underlying {@link ApplicationProcess} representing the {@link NativeApplication}
-     * @param options   the {@link OptionsByType} used to launch the {@link NativeApplication}
+     * @param platform the {@link Platform} on which the {@link NativeApplication} was launched
+     * @param process  the underlying {@link ApplicationProcess} representing the {@link NativeApplication}
+     * @param options  the {@link OptionsByType} used to launch the {@link NativeApplication}
      */
-    public SimpleNativeApplication(Platform platform, ApplicationProcess process, OptionsByType options)
-        {
+    public SimpleNativeApplication(Platform platform, ApplicationProcess process, OptionsByType options) {
         super(platform, process, options);
-        }
     }
+}
