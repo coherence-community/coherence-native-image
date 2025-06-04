@@ -17,6 +17,7 @@
     <modules>
         <module>coherence-native-testing-support</module>
         <module>coherence-native-server</module>
+        <module>coherence-native-extend</module>
     </modules>
 
     <properties>

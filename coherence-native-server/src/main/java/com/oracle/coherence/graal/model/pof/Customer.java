@@ -6,7 +6,10 @@
 
 package com.oracle.coherence.graal.model.pof;
 
+import com.tangosol.internal.util.invoke.Lambdas;
 import com.tangosol.io.pof.schema.annotation.PortableType;
+import com.tangosol.util.ValueExtractor;
+import com.tangosol.util.ValueUpdater;
 
 import java.util.Objects;
 

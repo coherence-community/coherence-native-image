@@ -35,6 +35,7 @@ public class ServerIT {
 
         try (NativeApplication server = LocalPlatform.get().launch(NativeApplication.class,
                 Arguments.of("-Djava.net.preferIPv4Stack=true",
+                        "-Dcoherence.lambdas=static",
                         "-Dcoherence.cluster=native-image-test-1",
                         "-Dcoherence.localhost=127.0.0.1",
                         "-Dcoherence.wka=127.0.0.1"),
@@ -65,6 +66,7 @@ public class ServerIT {
 
         try (NativeApplication server1 = LocalPlatform.get().launch(NativeApplication.class,
                 Arguments.of("-Djava.net.preferIPv4Stack=true",
+                        "-Dcoherence.lambdas=static",
                         "-Dcoherence.cluster=native-image-test-2",
                         "-Dcoherence.localhost=127.0.0.1",
                         "-Dcoherence.wka=127.0.0.1"),
@@ -75,6 +77,7 @@ public class ServerIT {
 
              NativeApplication server2 = LocalPlatform.get().launch(NativeApplication.class,
                      Arguments.of("-Djava.net.preferIPv4Stack=true",
+                             "-Dcoherence.lambdas=static",
                              "-Dcoherence.cluster=native-image-test-2",
                              "-Dcoherence.localhost=127.0.0.1",
                              "-Dcoherence.wka=127.0.0.1"),

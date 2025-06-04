@@ -20,6 +20,7 @@ import com.oracle.coherence.graal.model.pof.Address;
 import com.oracle.coherence.graal.model.pof.Customer;
 import com.oracle.coherence.graal.testing.NativeApplication;
 
+import com.tangosol.internal.util.invoke.Lambdas;
 import com.tangosol.net.Cluster;
 import com.tangosol.net.Coherence;
 import com.tangosol.net.NamedCache;
@@ -28,10 +29,15 @@ import com.tangosol.net.Service;
 import com.tangosol.net.Session;
 
 import com.tangosol.util.Aggregators;
+import com.tangosol.util.Extractors;
 import com.tangosol.util.Filters;
 import com.tangosol.util.MapListener;
 import com.tangosol.util.Processors;
+import com.tangosol.util.ValueExtractor;
+import com.tangosol.util.ValueUpdater;
+import com.tangosol.util.aggregator.DoubleSum;
 import com.tangosol.util.aggregator.GroupAggregator;
+import com.tangosol.util.function.Remote;
 import com.tangosol.util.listener.SimpleMapListener;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -90,10 +96,14 @@ public class BasicNamedCacheIT {
 
     @BeforeAll
     static void startCoherence() throws Exception {
+        String lambdas = "static";
+//        String lambdas = "dynamic";
+
         System.setProperty("coherence.cluster", CLUSTER_NAME);
         System.setProperty("coherence.wka", "127.0.0.1");
         System.setProperty("coherence.localhost", "127.0.0.1");
         System.setProperty("coherence.distributed.localstorage", "false");
+        System.setProperty("coherence.lambdas", lambdas);
 
         // Start Coherence in this test JVM
         coherence = Coherence.clusterMember().start().get(5, TimeUnit.MINUTES);
@@ -101,23 +111,27 @@ public class BasicNamedCacheIT {
         // Spawn two cluster members that will join the test JVM
         LocalPlatform platform = LocalPlatform.get();
 
+        ClassPath cp = ClassPath.automatic().excluding(ClassPath.ofClass(BasicNamedCacheIT.class));
+
         server1 = platform.launch(NativeApplication.class,
                 Arguments.of("-Djava.net.preferIPv4Stack=true",
+                        "-Dcoherence.lambdas=" + lambdas,
                         "-Dcoherence.cluster=" + CLUSTER_NAME,
                         "-Dcoherence.localhost=127.0.0.1",
                         "-Dcoherence.wka=127.0.0.1"),
                 ClassName.of(Server.class),
-                ClassPath.automatic(),
+                cp,
                 DisplayName.of("server-1"),
                 testLogs);
 
         server2 = platform.launch(NativeApplication.class,
                 Arguments.of("-Djava.net.preferIPv4Stack=true",
+                        "-Dcoherence.lambdas=" + lambdas,
                         "-Dcoherence.cluster=" + CLUSTER_NAME,
                         "-Dcoherence.localhost=127.0.0.1",
                         "-Dcoherence.wka=127.0.0.1"),
                 ClassName.of(Server.class),
-                ClassPath.automatic(),
+                cp,
                 DisplayName.of("server-2"),
                 testLogs);
 
@@ -204,18 +218,22 @@ public class BasicNamedCacheIT {
         Eventually.assertDeferred(insertCounter::get, is(maxCustomers), Timeout.of(1, TimeUnit.MINUTES));
 
         // aggregate
+        // These do not work with static lambdas:
+        // Aggregators.sum(Customer::getBalance)
+        DoubleSum<Customer> aggregator = new DoubleSum<>(ValueExtractor.of(Customer::getBalance));
         Map<String, Double> balanceByType = customers.aggregate(
-                GroupAggregator.createInstance(Customer::getCustomerType, Aggregators.sum(Customer::getBalance)));
+                GroupAggregator.createInstance(ValueExtractor.of(Customer::getCustomerType), aggregator));
         assertThat(balanceByType.isEmpty(), is(false));
 
         // entry processor to update all balances for GOLD customers to 0
-        customers.invokeAll(Filters.equal(Customer::getCustomerType, GOLD), Processors.update(Customer::setBalance, 0.0d));
+        // This does not work with static lambdas:
+//        customers.invokeAll(Filters.equal(ValueExtractor.of(Customer::getCustomerType), GOLD), Processors.update(Customer::setBalance, 0.0d));
 
         // return values
-        assertThat(customers.values(Filters.equal(Customer::getCustomerType, GOLD)).size(), not(0));
+        assertThat(customers.values(Filters.equal(ValueExtractor.of(Customer::getCustomerType), GOLD)).size(), not(0));
 
         // stream
-        assertThat(customers.stream(Filters.equal(Customer::getCustomerType, SILVER)).findFirst(), is(notNullValue()));
+        assertThat(customers.stream(Filters.equal(ValueExtractor.of(Customer::getCustomerType), SILVER)).findFirst(), is(notNullValue()));
     }
 
     private Address getRandomAddress() {
